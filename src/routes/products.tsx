@@ -533,7 +533,9 @@ function VariantSubTable({
               </tr>
             )}
             {rows.map((r) => {
-              const remaining = r.qty == null ? null : Math.max(0, r.qty - r.sold);
+              // r.qty is remaining stock already; total = remaining + sold.
+              const remaining = r.qty == null ? null : Math.max(0, r.qty);
+              const totalEver = r.qty == null ? null : r.qty + r.sold;
               return (
                 <tr key={r.key} className="transition hover:bg-muted/30">
                   <td className="whitespace-nowrap px-3 py-2">
