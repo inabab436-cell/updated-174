@@ -15,7 +15,9 @@ import {
   listWebsiteProducts, setProductPublished, retryProductDescription, uploadProductImage,
   upsertWebsiteProduct, deleteWebsiteProduct, deleteProductImage, analyzeProductImage,
   analyzeProductImageFile,
+  listProductSales,
   type WebsiteProductDTO,
+  type ProductSalesDTO,
 } from "@/lib/website-products.functions";
 import { createManualProduct, type ManualVariantInput } from "@/lib/inventory.functions";
 import { requireQuantity } from "@/lib/variant-quantity";
