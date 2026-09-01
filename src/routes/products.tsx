@@ -284,7 +284,18 @@ function ProductsPage() {
                               <span className="text-muted-foreground">—</span>
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 font-semibold">{qty}</td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {qtyKnown ? (
+                              <span className="inline-flex flex-col">
+                                <span className="font-bold">{qty}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  إجمالي كل المتغيّرات
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">غير محدّد</span>
+                            )}
+                          </td>
                           <td className="whitespace-nowrap px-4 py-3">
                             <div className="flex flex-col gap-1">
                               <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
