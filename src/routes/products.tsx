@@ -217,9 +217,13 @@ function ProductsPage() {
                       p.variants.length > 0 || p.colors.length > 0 || p.sizes.length > 0;
                     const firstImg = p.images[0];
                     const sales = salesById.get(p.id);
-                    const { qty, known: qtyKnown } = totalQty(p);
+                    // Stored variant quantities are ALREADY the remaining stock
+                    // (paid orders deduct it), so the total ever available is
+                    // remaining + sold — never remaining minus sold.
+                    const { qty: remainingQty, known: qtyKnown } = totalQty(p);
                     const sold = sales?.sold ?? 0;
-                    const remaining = qtyKnown ? Math.max(0, qty - sold) : null;
+                    const remaining = qtyKnown ? remainingQty : null;
+                    const qty = remainingQty + sold;
                     const pct = qty > 0 ? Math.min(100, Math.round((sold / qty) * 100)) : 0;
                     return (
                       <Fragment key={p.id}>
@@ -529,7 +533,9 @@ function VariantSubTable({
               </tr>
             )}
             {rows.map((r) => {
-              const remaining = r.qty == null ? null : Math.max(0, r.qty - r.sold);
+              // r.qty is remaining stock already; total = remaining + sold.
+              const remaining = r.qty == null ? null : Math.max(0, r.qty);
+              const totalEver = r.qty == null ? null : r.qty + r.sold;
               return (
                 <tr key={r.key} className="transition hover:bg-muted/30">
                   <td className="whitespace-nowrap px-3 py-2">
@@ -557,7 +563,7 @@ function VariantSubTable({
                     )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 font-semibold">
-                    {r.qty ?? <span className="text-muted-foreground">غير محدّد</span>}
+                    {totalEver ?? <span className="text-muted-foreground">غير محدّد</span>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
