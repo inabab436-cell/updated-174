@@ -2,7 +2,7 @@ import { Fragment, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Package, ChevronDown, ChevronUp, Sparkles, Plus, Trash2, Loader2, ImageOff, ImagePlus, X, Pencil } from "lucide-react";
+import { Package, ChevronDown, ChevronUp, Sparkles, Plus, Trash2, Loader2, ImageOff, ImagePlus, X, Pencil, Layers, TrendingUp, Boxes, Wallet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
