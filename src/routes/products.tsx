@@ -563,7 +563,7 @@ function VariantSubTable({
                     )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 font-semibold">
-                    {r.qty ?? <span className="text-muted-foreground">غير محدّد</span>}
+                    {totalEver ?? <span className="text-muted-foreground">غير محدّد</span>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
