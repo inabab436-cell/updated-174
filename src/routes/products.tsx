@@ -34,9 +34,21 @@ export const Route = createFileRoute("/products")({
   component: ProductsPage,
 });
 
-/** Stock on hand = sum of the per colour/size quantities. */
+/**
+ * Total stock for the whole product = sum of every colour/size quantity.
+ * `known` is false when no variant carries a number, so the UI shows
+ * "غير محدّد" instead of wrongly claiming the product is sold out.
+ */
 function totalQty(p: WebsiteProductDTO) {
-  return p.variants.reduce((n, v) => n + (v.quantity ?? 0), 0);
+  let qty = 0;
+  let known = false;
+  for (const v of p.variants) {
+    if (v.quantity != null && Number.isFinite(Number(v.quantity))) {
+      qty += Number(v.quantity);
+      known = true;
+    }
+  }
+  return { qty, known };
 }
 
 /** Compact summary tile above the table. */
