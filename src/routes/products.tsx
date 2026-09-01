@@ -579,8 +579,11 @@ function VariantSubTable({
   );
 }
 
-/** Colour-coded remaining-stock badge. */
-function StockPill({ remaining }: { remaining: number }) {
+/** Colour-coded remaining-stock badge; `null` means the quantity was never set. */
+function StockPill({ remaining }: { remaining: number | null }) {
+  if (remaining == null) {
+    return <span className="text-xs text-muted-foreground">غير محدّد</span>;
+  }
   const tone =
     remaining === 0
       ? "border-destructive/30 bg-destructive/10 text-destructive"
