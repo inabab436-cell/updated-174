@@ -184,7 +184,7 @@ function ProductsPage() {
             <StatTile
               icon={<Boxes className="h-4 w-4" />}
               label="إجمالي الكميات"
-              value={String(rows.reduce((n, p) => n + totalQty(p), 0))}
+              value={String(rows.reduce((n, p) => n + totalQty(p).qty, 0))}
             />
             <StatTile
               icon={<TrendingUp className="h-4 w-4" />}
