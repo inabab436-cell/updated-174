@@ -314,79 +314,149 @@ function DescriptionStatusIndicator({ product }: { product: WebsiteProductDTO })
   );
 }
 
-function VariantSubTable({ product }: { product: WebsiteProductDTO }) {
-  const byColor = new Map<string, typeof product.images>();
-  const bySize = new Map<string, typeof product.images>();
-  const other: typeof product.images = [];
+/** Normalised key so an order line ("أحمر"/"M") lines up with a variant row. */
+function vKey(color: unknown, size: unknown) {
+  const n = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase("ar");
+  return `${n(color)}|${n(size)}`;
+}
+
+/** Inner table: one row per colour + size with quantity, sold, remaining and images. */
+function VariantSubTable({
+  product,
+  sales,
+}: {
+  product: WebsiteProductDTO;
+  sales: ProductSalesDTO | undefined;
+}) {
+  const byColorId = new Map<string, typeof product.images>();
+  const bySizeId = new Map<string, typeof product.images>();
+  const generic: typeof product.images = [];
   for (const img of product.images) {
     if (img.color_id) {
-      const arr = byColor.get(img.color_id) ?? [];
+      const arr = byColorId.get(img.color_id) ?? [];
       arr.push(img);
-      byColor.set(img.color_id, arr);
+      byColorId.set(img.color_id, arr);
     } else if (img.size_id) {
-      const arr = bySize.get(img.size_id) ?? [];
+      const arr = bySizeId.get(img.size_id) ?? [];
       arr.push(img);
-      bySize.set(img.size_id, arr);
+      bySizeId.set(img.size_id, arr);
     } else {
-      other.push(img);
+      generic.push(img);
     }
   }
-  const colorRows = product.colors.map((c) => ({ c, imgs: byColor.get(c.id) ?? [] }));
-  const sizeRows  = product.sizes.map((s)  => ({ s, imgs: bySize.get(s.id)  ?? [] }));
+
+  const colorByLabel = new Map(
+    product.colors.map((c) => [String(c.label ?? "").trim().toLocaleLowerCase("ar"), c]),
+  );
+  const sizeByLabel = new Map(
+    product.sizes.map((s) => [String(s.label ?? "").trim().toLocaleLowerCase("ar"), s]),
+  );
+  const soldByVariant = new Map((sales?.variants ?? []).map((v) => [vKey(v.color, v.size), v.sold]));
+
+  const rows = product.variants.map((v, i) => {
+    const color = colorByLabel.get(String(v.color ?? "").trim().toLocaleLowerCase("ar"));
+    const size = sizeByLabel.get(String(v.size ?? "").trim().toLocaleLowerCase("ar"));
+    const imgs =
+      (color ? byColorId.get(color.id) : undefined) ??
+      (size ? bySizeId.get(size.id) : undefined) ??
+      generic;
+    const sold = soldByVariant.get(vKey(v.color, v.size)) ?? 0;
+    const qty = v.quantity ?? 0;
+    return { key: `v-${i}`, label: v.color, hex: color?.hex ?? null, size: v.size, qty, sold, imgs };
+  });
 
   return (
-    <div className="border-r-4 border-primary/60 bg-background/60 p-5">
+    <div className="border-r-4 border-primary/60 bg-background/60 p-4 sm:p-5">
+      <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+        <Layers className="h-3.5 w-3.5 text-primary" />
+        تفاصيل المتغيّرات — لون × مقاس
+      </div>
       <div className="overflow-x-auto rounded-xl border border-border/60 bg-background/80">
         <table className="w-full text-right text-xs">
-          <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+          <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-3 py-2">النوع</th>
-              <th className="px-3 py-2">الاسم</th>
+              <th className="px-3 py-2">اللون</th>
+              <th className="px-3 py-2">المقاس</th>
+              <th className="px-3 py-2">الكمية</th>
+              <th className="px-3 py-2">المُباع</th>
+              <th className="px-3 py-2">المتبقي</th>
               <th className="px-3 py-2">الصور</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
-            {colorRows.length === 0 && sizeRows.length === 0 && other.length === 0 && (
-              <tr><td colSpan={3} className="p-3 text-center text-muted-foreground">لا توجد صور مرتبطة.</td></tr>
-            )}
-            {colorRows.map(({ c, imgs }) => (
-              <tr key={`c-${c.id}`}>
-                <td className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">لون</td>
-                <td className="whitespace-nowrap px-3 py-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary">
-                    {c.hex && <span className="h-2.5 w-2.5 rounded-full border border-border/60" style={{ background: c.hex }} />}
-                    {c.label}
-                  </span>
-                </td>
-                <td className="px-3 py-2">
-                  <ImageStrip imgs={imgs} label={c.label} />
-                </td>
-              </tr>
-            ))}
-            {sizeRows.map(({ s, imgs }) => (
-              <tr key={`s-${s.id}`}>
-                <td className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">مقاس</td>
-                <td className="whitespace-nowrap px-3 py-2">{s.label}</td>
-                <td className="px-3 py-2">
-                  <ImageStrip imgs={imgs} label={s.label} />
-                </td>
-              </tr>
-            ))}
-            {other.length > 0 && (
+            {rows.length === 0 && (
               <tr>
-                <td className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">عام</td>
-                <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">بدون لون/مقاس</td>
-                <td className="px-3 py-2">
-                  <ImageStrip imgs={other} />
+                <td colSpan={6} className="p-4 text-center text-muted-foreground">
+                  لا توجد متغيّرات مسجّلة لهذا المنتج.
                 </td>
               </tr>
             )}
+            {rows.map((r) => {
+              const remaining = Math.max(0, r.qty - r.sold);
+              return (
+                <tr key={r.key} className="transition hover:bg-muted/30">
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {r.label ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+                        {r.hex && (
+                          <span
+                            className="h-2.5 w-2.5 rounded-full border border-border/60"
+                            style={{ background: r.hex }}
+                          />
+                        )}
+                        {r.label}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {r.size ? (
+                      <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[11px]">
+                        {r.size}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 font-semibold">{r.qty}</td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
+                      <TrendingUp className="h-2.5 w-2.5" />
+                      {r.sold}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <StockPill remaining={remaining} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ImageStrip imgs={r.imgs} label={r.label ?? undefined} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
   );
 }
+
+/** Colour-coded remaining-stock badge. */
+function StockPill({ remaining }: { remaining: number }) {
+  const tone =
+    remaining === 0
+      ? "border-destructive/30 bg-destructive/10 text-destructive"
+      : remaining <= 3
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-600"
+        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${tone}`}>
+      {remaining === 0 ? "نفدت" : remaining}
+    </span>
+  );
+}
+
 
 function ImageStrip({ imgs, label }: { imgs: WebsiteProductDTO["images"]; label?: string }) {
   if (imgs.length === 0) return <span className="text-muted-foreground">—</span>;
