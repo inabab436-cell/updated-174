@@ -498,7 +498,7 @@ function VariantSubTable({
       (size ? bySizeId.get(size.id) : undefined) ??
       generic;
     const sold = soldByVariant.get(vKey(v.color, v.size)) ?? 0;
-    const qty = v.quantity ?? 0;
+    const qty = v.quantity != null && Number.isFinite(Number(v.quantity)) ? Number(v.quantity) : null;
     return { key: `v-${i}`, label: v.color, hex: color?.hex ?? null, size: v.size, qty, sold, imgs };
   });
 
