@@ -217,9 +217,9 @@ function ProductsPage() {
                       p.variants.length > 0 || p.colors.length > 0 || p.sizes.length > 0;
                     const firstImg = p.images[0];
                     const sales = salesById.get(p.id);
-                    const qty = totalQty(p);
+                    const { qty, known: qtyKnown } = totalQty(p);
                     const sold = sales?.sold ?? 0;
-                    const remaining = Math.max(0, qty - sold);
+                    const remaining = qtyKnown ? Math.max(0, qty - sold) : null;
                     const pct = qty > 0 ? Math.min(100, Math.round((sold / qty) * 100)) : 0;
                     return (
                       <Fragment key={p.id}>
