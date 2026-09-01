@@ -2,7 +2,7 @@ import { Fragment, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Package, ChevronDown, ChevronUp, Sparkles, Plus, Trash2, Loader2, ImageOff, ImagePlus, X, Pencil } from "lucide-react";
+import { Package, ChevronDown, ChevronUp, Sparkles, Plus, Trash2, Loader2, ImageOff, ImagePlus, X, Pencil, Layers, TrendingUp, Boxes, Wallet } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,9 @@ import {
   listWebsiteProducts, setProductPublished, retryProductDescription, uploadProductImage,
   upsertWebsiteProduct, deleteWebsiteProduct, deleteProductImage, analyzeProductImage,
   analyzeProductImageFile,
+  listProductSales,
   type WebsiteProductDTO,
+  type ProductSalesDTO,
 } from "@/lib/website-products.functions";
 import { createManualProduct, type ManualVariantInput } from "@/lib/inventory.functions";
 import { requireQuantity } from "@/lib/variant-quantity";
@@ -32,6 +34,34 @@ export const Route = createFileRoute("/products")({
   component: ProductsPage,
 });
 
+/** Stock on hand = sum of the per colour/size quantities. */
+function totalQty(p: WebsiteProductDTO) {
+  return p.variants.reduce((n, v) => n + (v.quantity ?? 0), 0);
+}
+
+/** Compact summary tile above the table. */
+function StatTile({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <SurfaceCard className="flex items-center gap-3 p-4">
+      <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-brand text-primary-foreground shadow-glow">
+        {icon}
+      </span>
+      <span className="flex flex-col">
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-lg font-bold leading-tight">{value}</span>
+      </span>
+    </SurfaceCard>
+  );
+}
+
 function ProductsPage() {
   const qc = useQueryClient();
   
@@ -45,6 +75,15 @@ function ProductsPage() {
         : false;
     },
   });
+  // Sold pieces per product, read from confirmed orders.
+  const salesQ = useQuery({
+    queryKey: ["product-sales"],
+    queryFn: () => listProductSales(),
+    refetchInterval: 60_000,
+  });
+  const salesById = new Map<string, ProductSalesDTO>(
+    (salesQ.data ?? []).map((s) => [s.productId, s]),
+  );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [addOpen, setAddOpen] = useState(false);
   // Keep only the id: the dialog always reads the latest saved product row.
@@ -123,137 +162,212 @@ function ProductsPage() {
           </Button>
         </SurfaceCard>
       ) : (
-        <SurfaceCard>
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-sm">
-              <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="w-8 px-3 py-3"></th>
-                  <th className="px-4 py-3">الصورة</th>
-                  <th className="px-4 py-3">الاسم</th>
-                  <th className="px-4 py-3">الفئة</th>
-                  <th className="px-4 py-3">السعر</th>
-                  <th className="px-4 py-3">الألوان</th>
-                  <th className="px-4 py-3">المقاسات</th>
-                  <th className="px-4 py-3">تاريخ الإضافة</th>
-                  <th className="px-4 py-3">النشر</th>
-                  <th className="px-4 py-3">إجراءات</th>
-                </tr>
+        <>
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <StatTile
+              icon={<Package className="h-4 w-4" />}
+              label="عدد المنتجات"
+              value={String(rows.length)}
+            />
+            <StatTile
+              icon={<Boxes className="h-4 w-4" />}
+              label="إجمالي الكميات"
+              value={String(rows.reduce((n, p) => n + totalQty(p), 0))}
+            />
+            <StatTile
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="إجمالي المُباع"
+              value={String(salesById.size === 0 ? 0 : Array.from(salesById.values()).reduce((n, s) => n + s.sold, 0))}
+            />
+          </div>
 
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {rows.map((p) => {
-                  const isOpen = expanded[p.id] === true;
-                  const hasVariantImages = p.images.some((i) => i.color_id || i.size_id);
-                  const canExpand = p.colors.length > 0 || p.sizes.length > 0 || hasVariantImages;
-                  const firstImg = p.images[0];
-                  return (
-                    <Fragment key={p.id}>
-                      <tr className="transition hover:bg-muted/30">
-                        <td className="px-2 py-3 align-top">
-                          {canExpand ? (
-                            <button
-                              onClick={() => setExpanded((prev) => ({ ...prev, [p.id]: !isOpen }))}
-                              className="grid h-7 w-7 place-items-center rounded-lg border border-border/60 bg-background text-muted-foreground transition hover:border-primary/40 hover:text-primary"
-                              aria-label={isOpen ? "طي" : "توسيع"}
-                            >
-                              {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                            </button>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-3">
-                          {firstImg ? (
-                            <img
-                              src={firstImg.url}
-                              alt={p.name}
-                              className="h-14 w-14 rounded-xl object-cover ring-1 ring-border/60 shadow-card"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="grid h-14 w-14 place-items-center rounded-xl bg-muted text-xs text-muted-foreground">—</div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{p.name}</span>
-                            <DescriptionStatusIndicator product={p} />
-                          </div>
-                          {p.description && (
-                            <div className="line-clamp-1 text-xs text-muted-foreground">
-                              {p.description}
+          <SurfaceCard className="overflow-hidden p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-sm">
+                <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="w-10 px-3 py-3"></th>
+                    <th className="px-4 py-3">المنتج</th>
+                    <th className="px-4 py-3">السعر</th>
+                    <th className="px-4 py-3">الكمية</th>
+                    <th className="px-4 py-3">المُباع</th>
+                    <th className="px-4 py-3">المتبقي</th>
+                    <th className="px-4 py-3">الألوان / المقاسات</th>
+                    <th className="px-4 py-3">أضيف في</th>
+                    <th className="px-4 py-3">النشر</th>
+                    <th className="px-4 py-3">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {rows.map((p) => {
+                    const isOpen = expanded[p.id] === true;
+                    const canExpand =
+                      p.variants.length > 0 || p.colors.length > 0 || p.sizes.length > 0;
+                    const firstImg = p.images[0];
+                    const sales = salesById.get(p.id);
+                    const qty = totalQty(p);
+                    const sold = sales?.sold ?? 0;
+                    const remaining = Math.max(0, qty - sold);
+                    const pct = qty > 0 ? Math.min(100, Math.round((sold / qty) * 100)) : 0;
+                    return (
+                      <Fragment key={p.id}>
+                        <tr
+                          className={`transition hover:bg-muted/30 ${isOpen ? "bg-muted/20" : ""}`}
+                        >
+                          <td className="px-2 py-3 align-middle">
+                            {canExpand ? (
+                              <button
+                                onClick={() => setExpanded((prev) => ({ ...prev, [p.id]: !isOpen }))}
+                                className={`grid h-7 w-7 place-items-center rounded-lg border transition ${
+                                  isOpen
+                                    ? "border-primary/50 bg-primary/10 text-primary"
+                                    : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-primary"
+                                }`}
+                                aria-label={isOpen ? "طي" : "توسيع"}
+                              >
+                                {isOpen ? (
+                                  <ChevronUp className="h-3.5 w-3.5" />
+                                ) : (
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              {firstImg ? (
+                                <img
+                                  src={firstImg.url}
+                                  alt={p.name}
+                                  className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-border/60 shadow-card"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
+                                  <ImageOff className="h-4 w-4" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold">{p.name}</span>
+                                  <DescriptionStatusIndicator product={p} />
+                                </div>
+                                {p.description && (
+                                  <div className="line-clamp-1 max-w-[22ch] text-xs text-muted-foreground">
+                                    {p.description}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
-                        <td className="whitespace-nowrap px-4 py-3 font-medium">
-                          {p.price != null ? <span className="text-gradient-brand font-semibold">{p.price} {p.currency ?? ""}</span> : <span className="text-muted-foreground">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          {p.colors.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {p.colors.map((c) => (
-                                <span key={c.id} className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background px-2 py-0.5">
-                                  {c.hex && <span className="h-2.5 w-2.5 rounded-full border border-border/60" style={{ background: c.hex }} />}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {p.price != null ? (
+                              <span className="inline-flex items-center gap-1 font-semibold">
+                                <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="text-gradient-brand">
+                                  {p.price} {p.currency ?? ""}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 font-semibold">{qty}</td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                                <TrendingUp className="h-3 w-3" />
+                                {sold} قطعة
+                              </span>
+                              <span className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+                                <span
+                                  className="block h-full rounded-full bg-gradient-brand"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </span>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-xs">
+                            <StockPill remaining={remaining} />
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <div className="flex flex-wrap items-center gap-1">
+                              {p.colors.slice(0, 3).map((c) => (
+                                <span
+                                  key={c.id}
+                                  className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background px-2 py-0.5"
+                                >
+                                  {c.hex && (
+                                    <span
+                                      className="h-2.5 w-2.5 rounded-full border border-border/60"
+                                      style={{ background: c.hex }}
+                                    />
+                                  )}
                                   {c.label}
                                 </span>
                               ))}
+                              {p.colors.length > 3 && (
+                                <span className="text-muted-foreground">+{p.colors.length - 3}</span>
+                              )}
+                              {p.sizes.length > 0 && (
+                                <span className="rounded-md border border-border/60 bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                  {p.sizes.map((s) => s.label).join(" · ")}
+                                </span>
+                              )}
+                              {p.colors.length === 0 && p.sizes.length === 0 && (
+                                <span className="text-muted-foreground">—</span>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          {p.sizes.length > 0 ? p.sizes.map((s) => s.label).join(", ") : "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                          {new Date(p.created_at).toLocaleDateString("ar-EG")}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Button
-                            size="sm"
-                            variant={p.is_published ? "secondary" : "default"}
-                            className={p.is_published ? "" : "bg-gradient-brand text-primary-foreground shadow-glow"}
-                            onClick={() => pubMut.mutate({ id: p.id, is_published: !p.is_published })}
-                          >
-                            {p.is_published ? "إلغاء النشر" : "نشر"}
-                          </Button>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                            {new Date(p.created_at).toLocaleDateString("ar-EG")}
+                          </td>
+                          <td className="px-4 py-3">
                             <Button
-                              size="icon" variant="outline" title="تعديل"
-                              onClick={() => setEditingId(p.id)}
+                              size="sm"
+                              variant={p.is_published ? "secondary" : "default"}
+                              className={p.is_published ? "" : "bg-gradient-brand text-primary-foreground shadow-glow"}
+                              onClick={() => pubMut.mutate({ id: p.id, is_published: !p.is_published })}
                             >
-                              <Pencil className="h-4 w-4" />
+                              {p.is_published ? "إلغاء النشر" : "نشر"}
                             </Button>
-                            <Button
-                              size="icon" variant="ghost" title="حذف"
-                              className="text-destructive hover:text-destructive"
-                              disabled={delMut.isPending}
-                              onClick={() => {
-                                if (window.confirm(`حذف المنتج "${p.name}" نهائياً؟`)) delMut.mutate(p.id);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                      {isOpen && (
-                        <tr className="bg-muted/20">
-                          <td colSpan={10} className="p-0">
-
-                            <VariantSubTable product={p} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon" variant="outline" title="تعديل"
+                                onClick={() => setEditingId(p.id)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon" variant="ghost" title="حذف"
+                                className="text-destructive hover:text-destructive"
+                                disabled={delMut.isPending}
+                                onClick={() => {
+                                  if (window.confirm(`حذف المنتج "${p.name}" نهائياً؟`)) delMut.mutate(p.id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </SurfaceCard>
+                        {isOpen && (
+                          <tr className="bg-muted/20">
+                            <td colSpan={10} className="p-0">
+                              <VariantSubTable product={p} sales={sales} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </SurfaceCard>
+        </>
       )}
     </PageShell>
   );
@@ -314,79 +428,149 @@ function DescriptionStatusIndicator({ product }: { product: WebsiteProductDTO })
   );
 }
 
-function VariantSubTable({ product }: { product: WebsiteProductDTO }) {
-  const byColor = new Map<string, typeof product.images>();
-  const bySize = new Map<string, typeof product.images>();
-  const other: typeof product.images = [];
+/** Normalised key so an order line ("أحمر"/"M") lines up with a variant row. */
+function vKey(color: unknown, size: unknown) {
+  const n = (v: unknown) => String(v ?? "").trim().toLocaleLowerCase("ar");
+  return `${n(color)}|${n(size)}`;
+}
+
+/** Inner table: one row per colour + size with quantity, sold, remaining and images. */
+function VariantSubTable({
+  product,
+  sales,
+}: {
+  product: WebsiteProductDTO;
+  sales: ProductSalesDTO | undefined;
+}) {
+  const byColorId = new Map<string, typeof product.images>();
+  const bySizeId = new Map<string, typeof product.images>();
+  const generic: typeof product.images = [];
   for (const img of product.images) {
     if (img.color_id) {
-      const arr = byColor.get(img.color_id) ?? [];
+      const arr = byColorId.get(img.color_id) ?? [];
       arr.push(img);
-      byColor.set(img.color_id, arr);
+      byColorId.set(img.color_id, arr);
     } else if (img.size_id) {
-      const arr = bySize.get(img.size_id) ?? [];
+      const arr = bySizeId.get(img.size_id) ?? [];
       arr.push(img);
-      bySize.set(img.size_id, arr);
+      bySizeId.set(img.size_id, arr);
     } else {
-      other.push(img);
+      generic.push(img);
     }
   }
-  const colorRows = product.colors.map((c) => ({ c, imgs: byColor.get(c.id) ?? [] }));
-  const sizeRows  = product.sizes.map((s)  => ({ s, imgs: bySize.get(s.id)  ?? [] }));
+
+  const colorByLabel = new Map(
+    product.colors.map((c) => [String(c.label ?? "").trim().toLocaleLowerCase("ar"), c]),
+  );
+  const sizeByLabel = new Map(
+    product.sizes.map((s) => [String(s.label ?? "").trim().toLocaleLowerCase("ar"), s]),
+  );
+  const soldByVariant = new Map((sales?.variants ?? []).map((v) => [vKey(v.color, v.size), v.sold]));
+
+  const rows = product.variants.map((v, i) => {
+    const color = colorByLabel.get(String(v.color ?? "").trim().toLocaleLowerCase("ar"));
+    const size = sizeByLabel.get(String(v.size ?? "").trim().toLocaleLowerCase("ar"));
+    const imgs =
+      (color ? byColorId.get(color.id) : undefined) ??
+      (size ? bySizeId.get(size.id) : undefined) ??
+      generic;
+    const sold = soldByVariant.get(vKey(v.color, v.size)) ?? 0;
+    const qty = v.quantity ?? 0;
+    return { key: `v-${i}`, label: v.color, hex: color?.hex ?? null, size: v.size, qty, sold, imgs };
+  });
 
   return (
-    <div className="border-r-4 border-primary/60 bg-background/60 p-5">
+    <div className="border-r-4 border-primary/60 bg-background/60 p-4 sm:p-5">
+      <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+        <Layers className="h-3.5 w-3.5 text-primary" />
+        تفاصيل المتغيّرات — لون × مقاس
+      </div>
       <div className="overflow-x-auto rounded-xl border border-border/60 bg-background/80">
         <table className="w-full text-right text-xs">
-          <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+          <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-3 py-2">النوع</th>
-              <th className="px-3 py-2">الاسم</th>
+              <th className="px-3 py-2">اللون</th>
+              <th className="px-3 py-2">المقاس</th>
+              <th className="px-3 py-2">الكمية</th>
+              <th className="px-3 py-2">المُباع</th>
+              <th className="px-3 py-2">المتبقي</th>
               <th className="px-3 py-2">الصور</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
-            {colorRows.length === 0 && sizeRows.length === 0 && other.length === 0 && (
-              <tr><td colSpan={3} className="p-3 text-center text-muted-foreground">لا توجد صور مرتبطة.</td></tr>
-            )}
-            {colorRows.map(({ c, imgs }) => (
-              <tr key={`c-${c.id}`}>
-                <td className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">لون</td>
-                <td className="whitespace-nowrap px-3 py-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-primary">
-                    {c.hex && <span className="h-2.5 w-2.5 rounded-full border border-border/60" style={{ background: c.hex }} />}
-                    {c.label}
-                  </span>
-                </td>
-                <td className="px-3 py-2">
-                  <ImageStrip imgs={imgs} label={c.label} />
-                </td>
-              </tr>
-            ))}
-            {sizeRows.map(({ s, imgs }) => (
-              <tr key={`s-${s.id}`}>
-                <td className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">مقاس</td>
-                <td className="whitespace-nowrap px-3 py-2">{s.label}</td>
-                <td className="px-3 py-2">
-                  <ImageStrip imgs={imgs} label={s.label} />
-                </td>
-              </tr>
-            ))}
-            {other.length > 0 && (
+            {rows.length === 0 && (
               <tr>
-                <td className="whitespace-nowrap px-3 py-2 font-medium text-muted-foreground">عام</td>
-                <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">بدون لون/مقاس</td>
-                <td className="px-3 py-2">
-                  <ImageStrip imgs={other} />
+                <td colSpan={6} className="p-4 text-center text-muted-foreground">
+                  لا توجد متغيّرات مسجّلة لهذا المنتج.
                 </td>
               </tr>
             )}
+            {rows.map((r) => {
+              const remaining = Math.max(0, r.qty - r.sold);
+              return (
+                <tr key={r.key} className="transition hover:bg-muted/30">
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {r.label ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+                        {r.hex && (
+                          <span
+                            className="h-2.5 w-2.5 rounded-full border border-border/60"
+                            style={{ background: r.hex }}
+                          />
+                        )}
+                        {r.label}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {r.size ? (
+                      <span className="rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[11px]">
+                        {r.size}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 font-semibold">{r.qty}</td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
+                      <TrendingUp className="h-2.5 w-2.5" />
+                      {r.sold}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <StockPill remaining={remaining} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <ImageStrip imgs={r.imgs} label={r.label ?? undefined} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
     </div>
   );
 }
+
+/** Colour-coded remaining-stock badge. */
+function StockPill({ remaining }: { remaining: number }) {
+  const tone =
+    remaining === 0
+      ? "border-destructive/30 bg-destructive/10 text-destructive"
+      : remaining <= 3
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-600"
+        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${tone}`}>
+      {remaining === 0 ? "نفدت" : remaining}
+    </span>
+  );
+}
+
 
 function ImageStrip({ imgs, label }: { imgs: WebsiteProductDTO["images"]; label?: string }) {
   if (imgs.length === 0) return <span className="text-muted-foreground">—</span>;
