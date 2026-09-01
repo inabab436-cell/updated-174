@@ -217,9 +217,13 @@ function ProductsPage() {
                       p.variants.length > 0 || p.colors.length > 0 || p.sizes.length > 0;
                     const firstImg = p.images[0];
                     const sales = salesById.get(p.id);
-                    const { qty, known: qtyKnown } = totalQty(p);
+                    // Stored variant quantities are ALREADY the remaining stock
+                    // (paid orders deduct it), so the total ever available is
+                    // remaining + sold — never remaining minus sold.
+                    const { qty: remainingQty, known: qtyKnown } = totalQty(p);
                     const sold = sales?.sold ?? 0;
-                    const remaining = qtyKnown ? Math.max(0, qty - sold) : null;
+                    const remaining = qtyKnown ? remainingQty : null;
+                    const qty = remainingQty + sold;
                     const pct = qty > 0 ? Math.min(100, Math.round((sold / qty) * 100)) : 0;
                     return (
                       <Fragment key={p.id}>
