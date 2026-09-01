@@ -47,6 +47,15 @@ function ProductsPage() {
         : false;
     },
   });
+  // Sold pieces per product, read from confirmed orders.
+  const salesQ = useQuery({
+    queryKey: ["product-sales"],
+    queryFn: () => listProductSales(),
+    refetchInterval: 60_000,
+  });
+  const salesById = new Map<string, ProductSalesDTO>(
+    (salesQ.data ?? []).map((s) => [s.productId, s]),
+  );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [addOpen, setAddOpen] = useState(false);
   // Keep only the id: the dialog always reads the latest saved product row.
