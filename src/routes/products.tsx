@@ -34,9 +34,21 @@ export const Route = createFileRoute("/products")({
   component: ProductsPage,
 });
 
-/** Stock on hand = sum of the per colour/size quantities. */
+/**
+ * Total stock for the whole product = sum of every colour/size quantity.
+ * `known` is false when no variant carries a number, so the UI shows
+ * "غير محدّد" instead of wrongly claiming the product is sold out.
+ */
 function totalQty(p: WebsiteProductDTO) {
-  return p.variants.reduce((n, v) => n + (v.quantity ?? 0), 0);
+  let qty = 0;
+  let known = false;
+  for (const v of p.variants) {
+    if (v.quantity != null && Number.isFinite(Number(v.quantity))) {
+      qty += Number(v.quantity);
+      known = true;
+    }
+  }
+  return { qty, known };
 }
 
 /** Compact summary tile above the table. */
@@ -172,7 +184,7 @@ function ProductsPage() {
             <StatTile
               icon={<Boxes className="h-4 w-4" />}
               label="إجمالي الكميات"
-              value={String(rows.reduce((n, p) => n + totalQty(p), 0))}
+              value={String(rows.reduce((n, p) => n + totalQty(p).qty, 0))}
             />
             <StatTile
               icon={<TrendingUp className="h-4 w-4" />}
@@ -205,9 +217,9 @@ function ProductsPage() {
                       p.variants.length > 0 || p.colors.length > 0 || p.sizes.length > 0;
                     const firstImg = p.images[0];
                     const sales = salesById.get(p.id);
-                    const qty = totalQty(p);
+                    const { qty, known: qtyKnown } = totalQty(p);
                     const sold = sales?.sold ?? 0;
-                    const remaining = Math.max(0, qty - sold);
+                    const remaining = qtyKnown ? Math.max(0, qty - sold) : null;
                     const pct = qty > 0 ? Math.min(100, Math.round((sold / qty) * 100)) : 0;
                     return (
                       <Fragment key={p.id}>
@@ -272,7 +284,18 @@ function ProductsPage() {
                               <span className="text-muted-foreground">—</span>
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 font-semibold">{qty}</td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {qtyKnown ? (
+                              <span className="inline-flex flex-col">
+                                <span className="font-bold">{qty}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  إجمالي كل المتغيّرات
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">غير محدّد</span>
+                            )}
+                          </td>
                           <td className="whitespace-nowrap px-4 py-3">
                             <div className="flex flex-col gap-1">
                               <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
@@ -475,7 +498,7 @@ function VariantSubTable({
       (size ? bySizeId.get(size.id) : undefined) ??
       generic;
     const sold = soldByVariant.get(vKey(v.color, v.size)) ?? 0;
-    const qty = v.quantity ?? 0;
+    const qty = v.quantity != null && Number.isFinite(Number(v.quantity)) ? Number(v.quantity) : null;
     return { key: `v-${i}`, label: v.color, hex: color?.hex ?? null, size: v.size, qty, sold, imgs };
   });
 
@@ -506,7 +529,7 @@ function VariantSubTable({
               </tr>
             )}
             {rows.map((r) => {
-              const remaining = Math.max(0, r.qty - r.sold);
+              const remaining = r.qty == null ? null : Math.max(0, r.qty - r.sold);
               return (
                 <tr key={r.key} className="transition hover:bg-muted/30">
                   <td className="whitespace-nowrap px-3 py-2">
@@ -533,7 +556,9 @@ function VariantSubTable({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 font-semibold">{r.qty}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-semibold">
+                    {r.qty ?? <span className="text-muted-foreground">غير محدّد</span>}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-semibold text-primary">
                       <TrendingUp className="h-2.5 w-2.5" />
@@ -556,8 +581,11 @@ function VariantSubTable({
   );
 }
 
-/** Colour-coded remaining-stock badge. */
-function StockPill({ remaining }: { remaining: number }) {
+/** Colour-coded remaining-stock badge; `null` means the quantity was never set. */
+function StockPill({ remaining }: { remaining: number | null }) {
+  if (remaining == null) {
+    return <span className="text-xs text-muted-foreground">غير محدّد</span>;
+  }
   const tone =
     remaining === 0
       ? "border-destructive/30 bg-destructive/10 text-destructive"
