@@ -34,6 +34,34 @@ export const Route = createFileRoute("/products")({
   component: ProductsPage,
 });
 
+/** Stock on hand = sum of the per colour/size quantities. */
+function totalQty(p: WebsiteProductDTO) {
+  return p.variants.reduce((n, v) => n + (v.quantity ?? 0), 0);
+}
+
+/** Compact summary tile above the table. */
+function StatTile({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <SurfaceCard className="flex items-center gap-3 p-4">
+      <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-brand text-primary-foreground shadow-glow">
+        {icon}
+      </span>
+      <span className="flex flex-col">
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-lg font-bold leading-tight">{value}</span>
+      </span>
+    </SurfaceCard>
+  );
+}
+
 function ProductsPage() {
   const qc = useQueryClient();
   
