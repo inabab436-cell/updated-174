@@ -125,137 +125,212 @@ function ProductsPage() {
           </Button>
         </SurfaceCard>
       ) : (
-        <SurfaceCard>
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-sm">
-              <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="w-8 px-3 py-3"></th>
-                  <th className="px-4 py-3">الصورة</th>
-                  <th className="px-4 py-3">الاسم</th>
-                  <th className="px-4 py-3">الفئة</th>
-                  <th className="px-4 py-3">السعر</th>
-                  <th className="px-4 py-3">الألوان</th>
-                  <th className="px-4 py-3">المقاسات</th>
-                  <th className="px-4 py-3">تاريخ الإضافة</th>
-                  <th className="px-4 py-3">النشر</th>
-                  <th className="px-4 py-3">إجراءات</th>
-                </tr>
+        <>
+          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <StatTile
+              icon={<Package className="h-4 w-4" />}
+              label="عدد المنتجات"
+              value={String(rows.length)}
+            />
+            <StatTile
+              icon={<Boxes className="h-4 w-4" />}
+              label="إجمالي الكميات"
+              value={String(rows.reduce((n, p) => n + totalQty(p), 0))}
+            />
+            <StatTile
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="إجمالي المُباع"
+              value={String(salesById.size === 0 ? 0 : Array.from(salesById.values()).reduce((n, s) => n + s.sold, 0))}
+            />
+          </div>
 
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {rows.map((p) => {
-                  const isOpen = expanded[p.id] === true;
-                  const hasVariantImages = p.images.some((i) => i.color_id || i.size_id);
-                  const canExpand = p.colors.length > 0 || p.sizes.length > 0 || hasVariantImages;
-                  const firstImg = p.images[0];
-                  return (
-                    <Fragment key={p.id}>
-                      <tr className="transition hover:bg-muted/30">
-                        <td className="px-2 py-3 align-top">
-                          {canExpand ? (
-                            <button
-                              onClick={() => setExpanded((prev) => ({ ...prev, [p.id]: !isOpen }))}
-                              className="grid h-7 w-7 place-items-center rounded-lg border border-border/60 bg-background text-muted-foreground transition hover:border-primary/40 hover:text-primary"
-                              aria-label={isOpen ? "طي" : "توسيع"}
-                            >
-                              {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                            </button>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-3">
-                          {firstImg ? (
-                            <img
-                              src={firstImg.url}
-                              alt={p.name}
-                              className="h-14 w-14 rounded-xl object-cover ring-1 ring-border/60 shadow-card"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="grid h-14 w-14 place-items-center rounded-xl bg-muted text-xs text-muted-foreground">—</div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{p.name}</span>
-                            <DescriptionStatusIndicator product={p} />
-                          </div>
-                          {p.description && (
-                            <div className="line-clamp-1 text-xs text-muted-foreground">
-                              {p.description}
+          <SurfaceCard className="overflow-hidden p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-sm">
+                <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="w-10 px-3 py-3"></th>
+                    <th className="px-4 py-3">المنتج</th>
+                    <th className="px-4 py-3">السعر</th>
+                    <th className="px-4 py-3">الكمية</th>
+                    <th className="px-4 py-3">المُباع</th>
+                    <th className="px-4 py-3">المتبقي</th>
+                    <th className="px-4 py-3">الألوان / المقاسات</th>
+                    <th className="px-4 py-3">أضيف في</th>
+                    <th className="px-4 py-3">النشر</th>
+                    <th className="px-4 py-3">إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {rows.map((p) => {
+                    const isOpen = expanded[p.id] === true;
+                    const canExpand =
+                      p.variants.length > 0 || p.colors.length > 0 || p.sizes.length > 0;
+                    const firstImg = p.images[0];
+                    const sales = salesById.get(p.id);
+                    const qty = totalQty(p);
+                    const sold = sales?.sold ?? 0;
+                    const remaining = Math.max(0, qty - sold);
+                    const pct = qty > 0 ? Math.min(100, Math.round((sold / qty) * 100)) : 0;
+                    return (
+                      <Fragment key={p.id}>
+                        <tr
+                          className={`transition hover:bg-muted/30 ${isOpen ? "bg-muted/20" : ""}`}
+                        >
+                          <td className="px-2 py-3 align-middle">
+                            {canExpand ? (
+                              <button
+                                onClick={() => setExpanded((prev) => ({ ...prev, [p.id]: !isOpen }))}
+                                className={`grid h-7 w-7 place-items-center rounded-lg border transition ${
+                                  isOpen
+                                    ? "border-primary/50 bg-primary/10 text-primary"
+                                    : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-primary"
+                                }`}
+                                aria-label={isOpen ? "طي" : "توسيع"}
+                              >
+                                {isOpen ? (
+                                  <ChevronUp className="h-3.5 w-3.5" />
+                                ) : (
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              {firstImg ? (
+                                <img
+                                  src={firstImg.url}
+                                  alt={p.name}
+                                  className="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-border/60 shadow-card"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
+                                  <ImageOff className="h-4 w-4" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold">{p.name}</span>
+                                  <DescriptionStatusIndicator product={p} />
+                                </div>
+                                {p.description && (
+                                  <div className="line-clamp-1 max-w-[22ch] text-xs text-muted-foreground">
+                                    {p.description}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
-                        <td className="whitespace-nowrap px-4 py-3 font-medium">
-                          {p.price != null ? <span className="text-gradient-brand font-semibold">{p.price} {p.currency ?? ""}</span> : <span className="text-muted-foreground">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          {p.colors.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {p.colors.map((c) => (
-                                <span key={c.id} className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background px-2 py-0.5">
-                                  {c.hex && <span className="h-2.5 w-2.5 rounded-full border border-border/60" style={{ background: c.hex }} />}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {p.price != null ? (
+                              <span className="inline-flex items-center gap-1 font-semibold">
+                                <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="text-gradient-brand">
+                                  {p.price} {p.currency ?? ""}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 font-semibold">{qty}</td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                                <TrendingUp className="h-3 w-3" />
+                                {sold} قطعة
+                              </span>
+                              <span className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+                                <span
+                                  className="block h-full rounded-full bg-gradient-brand"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </span>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-xs">
+                            <StockPill remaining={remaining} />
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <div className="flex flex-wrap items-center gap-1">
+                              {p.colors.slice(0, 3).map((c) => (
+                                <span
+                                  key={c.id}
+                                  className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background px-2 py-0.5"
+                                >
+                                  {c.hex && (
+                                    <span
+                                      className="h-2.5 w-2.5 rounded-full border border-border/60"
+                                      style={{ background: c.hex }}
+                                    />
+                                  )}
                                   {c.label}
                                 </span>
                               ))}
+                              {p.colors.length > 3 && (
+                                <span className="text-muted-foreground">+{p.colors.length - 3}</span>
+                              )}
+                              {p.sizes.length > 0 && (
+                                <span className="rounded-md border border-border/60 bg-muted/50 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                                  {p.sizes.map((s) => s.label).join(" · ")}
+                                </span>
+                              )}
+                              {p.colors.length === 0 && p.sizes.length === 0 && (
+                                <span className="text-muted-foreground">—</span>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          {p.sizes.length > 0 ? p.sizes.map((s) => s.label).join(", ") : "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
-                          {new Date(p.created_at).toLocaleDateString("ar-EG")}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Button
-                            size="sm"
-                            variant={p.is_published ? "secondary" : "default"}
-                            className={p.is_published ? "" : "bg-gradient-brand text-primary-foreground shadow-glow"}
-                            onClick={() => pubMut.mutate({ id: p.id, is_published: !p.is_published })}
-                          >
-                            {p.is_published ? "إلغاء النشر" : "نشر"}
-                          </Button>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                            {new Date(p.created_at).toLocaleDateString("ar-EG")}
+                          </td>
+                          <td className="px-4 py-3">
                             <Button
-                              size="icon" variant="outline" title="تعديل"
-                              onClick={() => setEditingId(p.id)}
+                              size="sm"
+                              variant={p.is_published ? "secondary" : "default"}
+                              className={p.is_published ? "" : "bg-gradient-brand text-primary-foreground shadow-glow"}
+                              onClick={() => pubMut.mutate({ id: p.id, is_published: !p.is_published })}
                             >
-                              <Pencil className="h-4 w-4" />
+                              {p.is_published ? "إلغاء النشر" : "نشر"}
                             </Button>
-                            <Button
-                              size="icon" variant="ghost" title="حذف"
-                              className="text-destructive hover:text-destructive"
-                              disabled={delMut.isPending}
-                              onClick={() => {
-                                if (window.confirm(`حذف المنتج "${p.name}" نهائياً؟`)) delMut.mutate(p.id);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                      {isOpen && (
-                        <tr className="bg-muted/20">
-                          <td colSpan={10} className="p-0">
-
-                            <VariantSubTable product={p} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon" variant="outline" title="تعديل"
+                                onClick={() => setEditingId(p.id)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon" variant="ghost" title="حذف"
+                                className="text-destructive hover:text-destructive"
+                                disabled={delMut.isPending}
+                                onClick={() => {
+                                  if (window.confirm(`حذف المنتج "${p.name}" نهائياً؟`)) delMut.mutate(p.id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </SurfaceCard>
+                        {isOpen && (
+                          <tr className="bg-muted/20">
+                            <td colSpan={10} className="p-0">
+                              <VariantSubTable product={p} sales={sales} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </SurfaceCard>
+        </>
       )}
     </PageShell>
   );
