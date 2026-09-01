@@ -148,6 +148,95 @@ export const listWebsiteProducts = createServerFn({ method: "GET" }).handler(
   },
 );
 
+// ---------- SOLD QUANTITIES (per product / per variant) -------------------
+/** One sold aggregate: total pieces + a per color/size breakdown. */
+export interface ProductSalesDTO {
+  productId: string;
+  sold: number;
+  variants: { color: string | null; size: string | null; sold: number }[];
+}
+
+const variantKey = (color: unknown, size: unknown) =>
+  `${String(color ?? "").trim().toLocaleLowerCase("ar")}|${String(size ?? "").trim().toLocaleLowerCase("ar")}`;
+
+/**
+ * Pieces actually sold per product, read from CONFIRMED orders only
+ * (a pending manual payment never deducted stock, so it is not a sale).
+ * Order lines store the product NAME, so matching is done on the same
+ * normalised Arabic text used elsewhere in the app.
+ */
+export const listProductSales = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ProductSalesDTO[]> => {
+    const { requireUserId } = await import("@/lib/session-guard.server");
+    const { getSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { normalizeProductText } = await import("@/lib/product-name-match");
+    const { userId } = await requireUserId();
+    const admin = getSupabaseAdmin();
+
+    const { data: products } = await admin
+      .from("products")
+      .select("id, name")
+      .eq("user_id", userId);
+    const rows = (products ?? []) as { id: string; name: string | null }[];
+    if (rows.length === 0) return [];
+
+    const byName = new Map<string, string>();
+    for (const p of rows) {
+      const key = normalizeProductText(p.name);
+      if (key) byName.set(key, String(p.id));
+    }
+
+    const { data: merchant } = await admin
+      .from("merchants")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const merchantId = (merchant as any)?.id as string | undefined;
+
+    const acc = new Map<string, ProductSalesDTO>();
+    for (const p of rows) {
+      acc.set(String(p.id), { productId: String(p.id), sold: 0, variants: [] });
+    }
+    if (!merchantId) return Array.from(acc.values());
+
+    const { data: orders } = await admin
+      .from("orders")
+      .select("items, payment_status")
+      .eq("merchant_id", merchantId)
+      .limit(2000);
+
+    const variantAcc = new Map<string, Map<string, { color: string | null; size: string | null; sold: number }>>();
+    for (const o of (orders ?? []) as any[]) {
+      const paid = String(o.payment_status ?? "confirmed") === "confirmed";
+      if (!paid) continue;
+      const items = Array.isArray(o.items) ? o.items : [];
+      for (const it of items) {
+        const key = normalizeProductText((it as any)?.product_name);
+        const pid = key ? byName.get(key) : undefined;
+        if (!pid) continue;
+        const qty = Number((it as any)?.quantity ?? 0);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        const entry = acc.get(pid)!;
+        entry.sold += qty;
+        const color = ((it as any)?.color as string | null) ?? null;
+        const size = ((it as any)?.size as string | null) ?? null;
+        let m = variantAcc.get(pid);
+        if (!m) { m = new Map(); variantAcc.set(pid, m); }
+        const vk = variantKey(color, size);
+        const cur = m.get(vk) ?? { color, size, sold: 0 };
+        cur.sold += qty;
+        m.set(vk, cur);
+      }
+    }
+    for (const [pid, m] of variantAcc) {
+      const entry = acc.get(pid);
+      if (entry) entry.variants = Array.from(m.values());
+    }
+    return Array.from(acc.values());
+  },
+);
+
+
 // ---------- CREATE / UPDATE product core + sizes + colors -----------------
 export interface UpsertProductInput {
   id?: string;
